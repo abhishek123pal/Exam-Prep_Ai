@@ -1,0 +1,50 @@
+# Dependencies (Removed leading slashes to cover nested subdirectories)
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Environment Secrets
+.env
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js / React / Build Output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / Misc
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.pem
+.vercel
+
+# Testing
+coverage/
+.nyc_output/
+
+# Local AI Models & Caches
+.onnx
+*.onnx
+models/
+.cache/

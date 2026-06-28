@@ -1,0 +1,70 @@
+
+
+// import express from 'express';
+// import cors from 'cors';
+// import dotenv from 'dotenv';
+// import aiRoutes from './routes/ai.routes'; // 👈 1. अपना राउटर इम्पोर्ट करो
+
+// dotenv.config();
+
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+
+// // 🛡️ Middlewares
+// app.use(cors({
+//   origin: '*', // प्रोडक्शन में इसे अपने फ्रंटएंड URL से बदल देना
+//   methods: ['GET', 'POST']
+// }));
+// app.use(express.json()); // JSON पेलोड पार्स करने के लिए
+
+// // 🚀 Routes Mounting (यहीं पर तुम्हारा 404 आ रहा था!)
+// app.use('/api/ai', aiRoutes); // 👈 2. राउटर को इस पाथ पर हुक करो
+
+// // Health Check Route
+// app.get('/', (req, res) => {
+//   res.send('AI RAG Engine is Live 🟢');
+// });
+
+// // Start Server
+// app.listen(PORT, () => {
+//   console.log(`[CORE] Server active on port ${PORT}`);
+// });
+
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import aiRoutes from './routes/ai.routes';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// 🛡️ CORS Configuration: Allow Next.js frontend to access streaming
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Core API Router
+app.use('/api/ai', aiRoutes);
+
+// Health check for Deployment (Render/Railway)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'HEALTHY', timestamp: new Date() });
+});
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('💥 [GLOBAL EXCEPTION]:', err.message);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 [BACKEND ENGINE]: Running on http://localhost:${PORT}`);
+});

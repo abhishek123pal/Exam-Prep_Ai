@@ -1,0 +1,68 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+  binaryTargets   = ["native", "windows"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [uuid_ossp(map: "uuid-ossp", schema: "extensions"), vector]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subject {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  name      String
+  semester  Int
+  branch    String
+  createdAt DateTime   @default(now())
+  pyqs      PYQ[]
+  syllabus  Syllabus[]
+}
+
+model Syllabus {
+  id         String   @id @default(uuid())
+  subjectId  String
+  unitNumber Int
+  title      String
+  topics     String[]
+  createdAt  DateTime @default(now())
+  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model PYQ {
+  id        String   @id @default(uuid())
+  subjectId String
+  year      Int
+  examType  String
+  fileUrl   String
+  content   String?
+  createdAt DateTime @default(now())
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model SemanticCache {
+  id        String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  query     String                 @unique
+  response  String
+  embedding Unsupported("vector")?
+  createdAt DateTime?              @default(now()) @db.Timestamptz(6)
+
+  @@index([embedding], map: "semantic_cache_embedding_idx")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
