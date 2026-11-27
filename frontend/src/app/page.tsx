@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, Sparkles, Flame, Target, BookOpen, 
   FileText, AlertTriangle, ChevronRight, BrainCircuit, 
-  Book, Layers, CornerDownLeft
+  Book, Layers, CornerDownLeft, Database
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,12 +18,16 @@ interface Subject {
   code: string;
 }
 
+const MOCK_SOURCES = [
+  { title: "AKTU Quantum - AI Context", type: "RAG Engine", domain: "internal", icon: <Database size={14} className="text-indigo-400" /> },
+];
+
 function getChatSessionId() {
   const storageKey = 'examprep-chat-session-id';
-  let sessionId = window.localStorage.getItem(storageKey);
+  let sessionId = window.sessionStorage.getItem(storageKey);
   if (!sessionId) {
     sessionId = window.crypto.randomUUID();
-    window.localStorage.setItem(storageKey, sessionId);
+    window.sessionStorage.setItem(storageKey, sessionId);
   }
   return sessionId;
 }

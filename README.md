@@ -22,7 +22,7 @@ npm install
 cp .env.example .env
 ```
 
-Set `DATABASE_URL`, `DIRECT_URL`, `GEMINI_API_KEY`, and at least one chat provider key in `backend/.env`. Set `REDIS_URL` if Redis is available. Set a long random `ADMIN_API_KEY`; the admin page asks for this key and sends it as a bearer token.
+Set `DATABASE_URL`, `DIRECT_URL`, `GEMINI_API_KEY`, and at least one chat provider key in `backend/.env`. Set `REDIS_URL` if Redis is available. Set a long random `ADMIN_API_KEY`; the admin page asks for this key and sends it as a bearer token. The frontend creates a per-tab session ID; other API clients must send their own unique `sessionId` with every `/api/ai/chat/stream` request.
 
 Apply the database migrations and start the backend:
 
@@ -42,7 +42,9 @@ npm run dev
 
 The default frontend API URL is `http://localhost:5000`. Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the backend runs elsewhere. For a deployed frontend, set the backend's `FRONTEND_ORIGIN` to its origin (comma-separated origins are supported).
 
-The chat endpoint applies an in-process limit of 30 requests per client IP per minute. Deployments with multiple backend instances should move this limit to a shared store such as Redis.
+The chat endpoint applies an in-process limit of 30 requests per client IP per minute. In production behind one reverse proxy, set `TRUST_PROXY_HOPS=1` so Express can use the forwarded client IP. Set the hop count to match your actual proxy chain; do not enable broad proxy trust without checking that chain. Deployments with multiple backend instances should move the limit to a shared store such as Redis.
+
+The vector/cache migration discards pre-existing semantic-cache rows because older cache entries were not isolated by subject. Knowledge chunks are retained where possible; review legacy database state and take a backup before applying migrations to an existing production database.
 
 Open `http://localhost:3000`. Create a subject from `/admin`, then add syllabus or past-paper text to make it available to retrieval.
 

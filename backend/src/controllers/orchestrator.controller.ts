@@ -14,8 +14,7 @@ export const handleStreamingChat = async (req: Request, res: Response) => {
   if (type !== 'sample_paper' && (typeof prompt !== 'string' || !prompt.trim())) {
     return res.status(400).json({ error: 'A prompt is required.' });
   }
-  const suppliedSessionId = typeof req.body.sessionId === 'string' ? req.body.sessionId.trim() : '';
-  const sessionId = suppliedSessionId.slice(0, 128) || `session_${subjectId}`;
+  const sessionId = req.body.sessionId.trim();
 
   // SSE Protocol Headers
   res.setHeader('Content-Type', 'text/event-stream');

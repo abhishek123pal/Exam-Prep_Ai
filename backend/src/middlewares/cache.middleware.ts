@@ -36,9 +36,7 @@ export const semanticCacheMiddleware = async (req: Request, res: Response, next:
       const cachedMatch = matches[0];
       console.log(`⚡ [SEMANTIC CACHE HIT] Subject: ${subjectId} | Confidence: ${(cachedMatch.similarity * 100).toFixed(2)}%`);
 
-      const sessionId = typeof req.body.sessionId === 'string' && req.body.sessionId.trim()
-        ? req.body.sessionId.trim()
-        : `session_${subjectId}`;
+      const sessionId = req.body.sessionId.trim();
       await memoryService.addMessage(sessionId, 'user', prompt);
       await memoryService.addMessage(sessionId, 'assistant', cachedMatch.response);
 

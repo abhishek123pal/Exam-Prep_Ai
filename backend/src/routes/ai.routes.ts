@@ -15,6 +15,19 @@ router.get('/subjects', getAllSubjects);
 router.post(
   '/chat/stream', 
   chatRateLimit,
+  (req, res, next) => {
+    const { prompt, subjectId, sessionId } = req.body || {};
+    if (typeof subjectId !== 'string' || !subjectId.trim()) {
+      return res.status(400).json({ error: 'subjectId is required.' });
+    }
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      return res.status(400).json({ error: 'A prompt is required.' });
+    }
+    if (typeof sessionId !== 'string' || sessionId.trim().length < 8 || sessionId.trim().length > 128) {
+      return res.status(400).json({ error: 'A unique sessionId between 8 and 128 characters is required.' });
+    }
+    return next();
+  },
   scrubPIIMiddleware,     // 1. Clean PII data
   semanticCacheMiddleware, // 2. Perform database lookup (0 tokens if match)
   handleStreamingChat     // 3. Orchestrate multi-provider fallback streaming

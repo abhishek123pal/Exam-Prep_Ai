@@ -55,13 +55,13 @@ model PYQ {
 }
 
 model SemanticCache {
-  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   subjectId   String
   requestType String   @default("chat")
   query       String
   response    String
   embedding   Unsupported("vector(768)")
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@unique([subjectId, requestType, query])

@@ -8,6 +8,15 @@ import adminRoutes from './routes/admin.routes';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const trustedProxyHops = process.env.TRUST_PROXY_HOPS;
+if (trustedProxyHops) {
+  const hopCount = Number(trustedProxyHops);
+  if (!Number.isInteger(hopCount) || hopCount < 1) {
+    throw new Error('TRUST_PROXY_HOPS must be a positive integer when configured.');
+  }
+  app.set('trust proxy', hopCount);
+}
+
 // =====================
 // Middleware
 // =====================
