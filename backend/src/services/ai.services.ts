@@ -1,13 +1,15 @@
 import prisma from '../config/db';
+import { retrieveRelevantContext } from './retrieval.service';
 
 // 1. Existing Topic Chat Service
-export const generateStudyMaterial = async (subjectId: string, topicQuery: string) => {
+export const generateStudyMaterial = async (subjectId: string, topicQuery: string, queryVector?: string) => {
   try {
     const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
     if (!subject) throw new Error("Target subject not found.");
 
     const syllabusNodes = await prisma.syllabus.findMany({ where: { subjectId } });
     const pyqNodes = await prisma.pYQ.findMany({ where: { subjectId } });
+    const knowledgeContext = await retrieveRelevantContext(topicQuery, subjectId, 3, queryVector);
 
     const syllabusContext = syllabusNodes.map(s => `Unit ${s.unitNumber} (${s.title}): ${s.topics.join(', ')}`).join('\n');
     const pyqContext = pyqNodes.map(p => `Year ${p.year} (${p.examType}): ${p.content}`).join('\n');
@@ -17,6 +19,7 @@ export const generateStudyMaterial = async (subjectId: string, topicQuery: strin
       The student is asking about: "${topicQuery}".
       Syllabus Context:\n${syllabusContext}
       PYQ Context:\n${pyqContext}
+      Ingested Study Material:\n${knowledgeContext}
       Provide an exam-ready answer for "${topicQuery}". Do not output unrelated network concepts unless asked.
     `;
   } catch (error: any) {
@@ -34,6 +37,7 @@ export const generateSamplePaper = async (subjectId: string) => {
     // Fetch syllabus and historical questions
     const syllabusNodes = await prisma.syllabus.findMany({ where: { subjectId } });
     const pyqNodes = await prisma.pYQ.findMany({ where: { subjectId } });
+    const knowledgeContext = await retrieveRelevantContext('Generate a syllabus-grounded sample exam using the subject syllabus and past questions.', subjectId);
 
     const syllabusContext = syllabusNodes.map(s => `Unit ${s.unitNumber} (${s.title}): ${s.topics.join(', ')}`).join('\n');
     const pyqContext = pyqNodes.map(p => `Year ${p.year} (${p.examType}): ${p.content}`).join('\n');
@@ -48,6 +52,9 @@ export const generateSamplePaper = async (subjectId: string) => {
 
       --- HISTORICAL PYQ PATTERNS & WEIGHTAGE ---
       ${pyqContext || "No historical papers available. Build based on standard unit weightage."}
+
+      --- INGESTED STUDY MATERIAL ---
+      ${knowledgeContext}
 
       --- EXAM STRUCTURE COMPLIANCE ---
       Generate the paper exactly in this standard university structure:

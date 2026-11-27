@@ -1,75 +1,63 @@
-# 🚀 ExamPrep AI Engine
+# ExamPrep AI
 
-ExamPrep AI is a high-performance, fault-tolerant academic intelligence engine designed to generate dynamic study notes and mock papers for large-scale university syllabi (e.g., AKTU). 
+ExamPrep AI is an early-stage study assistant with a Next.js frontend and an Express, TypeScript, PostgreSQL, Prisma, and pgvector backend. It can ingest subject material, retrieve relevant chunks, and stream AI responses through configured model providers.
 
-The system leverages a multi-LLM orchestration strategy (**Cerebras, Groq, Gemini**) combined with an advanced semantic caching layer to deliver sub-second responses.
+## Requirements
 
----
+- Node.js 20 or newer
+- PostgreSQL with the `vector` extension available
+- A Google Gemini API key for embeddings
+- At least one chat provider key: Cerebras, Groq, or Gemini (the Gemini key is also used for embeddings)
+- Redis is optional. Without it, chat history is held in process memory and is lost when the server restarts.
 
-## 📐 System Architecture
+## Configure
 
-![ExamPrep AI Architecture Diagram](./doc/architecture.png)
+Open two terminals from the repository root.
 
----
+In the first terminal:
 
-## 🛠️ Tech Stack
+```bash
+cd backend
+npm install
+cp .env.example .env
+```
 
-* **Runtime:** Node.js, TypeScript
-* **Orchestration:** Custom LLM Factory (Multi-provider Fallback)
-* **Database:** PostgreSQL (via Prisma ORM)
-* **Vector Search:** `pgvector` (HNSW indexing for $O(\log N)$ latency)
-* **Streaming:** Server-Sent Events (SSE) for low-latency UI updates
+Set `DATABASE_URL`, `DIRECT_URL`, `GEMINI_API_KEY`, and at least one chat provider key in `backend/.env`. Set `REDIS_URL` if Redis is available. Set a long random `ADMIN_API_KEY`; the admin page asks for this key and sends it as a bearer token.
 
----
+Apply the database migrations and start the backend:
 
-## ⚡ Key Architectural Features
+```bash
+npx prisma migrate deploy
+npm run dev
+```
 
-* **Semantic Caching:** Utilizes PostgreSQL (`pgvector`) to perform sub-millisecond nearest-neighbor searches, bypassing expensive LLM calls for frequently queried academic topics.
-* **Resilient Circuit Breaker:** An automated fallback mechanism that detects provider downtime (e.g., Groq/Cerebras) and immediately reroutes requests to an alternative model to ensure **99.9% uptime**.
-* **Dynamic Academic Routing:** Intelligent intent classification that switches between *Note Generation* and *Dynamic Mock Exam Generation* based on the incoming request type.
-* **Production-Ready Security:** Implements rigorous rate-limiting, PII (Personally Identifiable Information) scrubbing, and context-window protection to maintain system integrity.
+In the second terminal:
 
----
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-## 🏗️ Core Pipeline
+The default frontend API URL is `http://localhost:5000`. Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the backend runs elsewhere. For a deployed frontend, set the backend's `FRONTEND_ORIGIN` to its origin (comma-separated origins are supported).
 
-> **How a request flows through the engine:**
-> 1. **Scrubbing:** Middleware layer sanitizes the incoming prompt by redacting PII (Email/Phone).
-> 2. **Vector Lookup:** The system queries the `SemanticCache` using HNSW indexing to identify existing answers.
-> 3. **Orchestration:** If no cache match is found, the LLM Factory triggers a stream from the most stable available provider.
-> 4. **Async Persistence:** Post-generation, the response is asynchronously stored in the vector database to optimize future response times.
+The chat endpoint applies an in-process limit of 30 requests per client IP per minute. Deployments with multiple backend instances should move this limit to a shared store such as Redis.
 
----
+Open `http://localhost:3000`. Create a subject from `/admin`, then add syllabus or past-paper text to make it available to retrieval.
 
-## 📊 Monitoring & Analytics
+## Build
 
-The system integrates a dedicated `ProviderLog` table to monitor the live performance, latency, and reliability of third-party models. This allows for data-driven analysis to prioritize stable providers and optimize operational API costs.
+```bash
+cd backend
+npm run build
+```
 
----
+```bash
+cd frontend
+npm run build
+```
 
-## 🚀 Getting Started
+## Current scope
 
-### Prerequisites
-* Node.js (v18+)
-* PostgreSQL with `pgvector` extension enabled
-* API Keys for **Groq**, **Cerebras**, and **Google Gemini**
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/your-username/exam-prep-ai.git](https://github.com/your-username/exam-prep-ai.git)
-   cd exam-prep-ai
-
- Install dependencies:
-     npm install
-
- Setup environment variables:
-    cp .env.example .env
-    Open the .env file and input your specific API keys and Database URL.
-
- Run database migrations:
-     npx prisma migrate dev
-
- Start the development server:
-   npm run dev
+The dashboard, subject selection, admin ingestion, retrieval, and streamed responses are implemented. Explorer, mock test, analytics, and settings pages are still placeholders. Authentication currently protects admin endpoints with one shared `ADMIN_API_KEY`; configure a stronger identity and role system before exposing a public multi-user deployment.

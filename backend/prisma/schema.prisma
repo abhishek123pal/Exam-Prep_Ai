@@ -29,6 +29,8 @@ model Subject {
   createdAt DateTime   @default(now())
   pyqs      PYQ[]
   syllabus  Syllabus[]
+  knowledgeChunks KnowledgeChunk[]
+  semanticCache SemanticCache[]
 }
 
 model Syllabus {
@@ -53,13 +55,17 @@ model PYQ {
 }
 
 model SemanticCache {
-  id        String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  query     String                 @unique
-  response  String
-  embedding Unsupported("vector")?
-  createdAt DateTime?              @default(now()) @db.Timestamptz(6)
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  subjectId   String
+  requestType String   @default("chat")
+  query       String
+  response    String
+  embedding   Unsupported("vector(768)")
+  createdAt   DateTime @default(now())
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@index([embedding], map: "semantic_cache_embedding_idx")
+  @@unique([subjectId, requestType, query])
+  @@index([subjectId])
 }
 
 enum Role {
@@ -68,14 +74,17 @@ enum Role {
 }
 
 model KnowledgeChunk {
-  id          String   @id @default(uuid())
-  subjectId   String   // किस सब्जेक्ट का है?
-  sourceType  String   // 'PYQ', 'SYLLABUS', 'NOTES'
-  metadata    Json?    // एक्स्ट्रा इन्फो (जैसे: { year: 2026, unit: 1 })
-  content     String   // असली टेक्स्ट (300-400 words)
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  subjectId   String
+  sourceType  String
+  metadata    Json?
+  content     String
   
-  // Gemini text-embedding-004 outputs 768 dimensions
-  embedding   Unsupported("vector(768)") 
+  // Gemini Embedding 001 is requested at 768 dimensions by embedding.service.ts.
+  embedding   Unsupported("vector(768)")
 
   createdAt   DateTime @default(now())
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([subjectId])
 }

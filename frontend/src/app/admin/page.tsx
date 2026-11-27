@@ -6,6 +6,7 @@ import { BookOpen, FileText, Layers, PlusCircle, CheckCircle2 } from 'lucide-rea
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'subject' | 'syllabus' | 'pyq'>('subject');
   const [status, setStatus] = useState({ success: false, message: '' });
+  const [adminKey, setAdminKey] = useState('');
 
   // Form States
   const [subjectForm, setSubjectForm] = useState({ code: '', name: '', semester: '6', branch: 'IT' });
@@ -39,13 +40,14 @@ export default function AdminDashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/${endpoint}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${apiBase}/api/admin/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
         body: JSON.stringify(payload),
       });
 
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       
       if (res.ok && result.success) {
         showNotification(`${endpoint.toUpperCase()} data synced successfully! 🎉`);
@@ -53,7 +55,7 @@ export default function AdminDashboard() {
         showNotification(`Error: ${result.error || 'Request failed'}`, false);
       }
     } catch (err: any) {
-      showNotification(`Backend Connection Failed! Ensure server is running.`, false);//here is the problem showing  error
+      showNotification(err instanceof Error ? err.message : 'Could not reach the backend.', false);
     }
   };
 
@@ -67,6 +69,9 @@ export default function AdminDashboard() {
             <PlusCircle className="text-indigo-400" /> ExamPrep AI Control Panel
           </h1>
           <p className="text-sm text-slate-500">Production-grade data ingestion pipeline.</p>
+          <label className="block text-xs text-slate-400">Admin API key
+            <input type="password" autoComplete="current-password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} className="mt-2 block w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-slate-200" placeholder="Enter ADMIN_API_KEY" />
+          </label>
         </div>
 
         {/* Status Toast */}
@@ -94,6 +99,10 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <InputGroup label="Subject Code" placeholder="e.g., KIT601" value={subjectForm.code} onChange={(v) => setSubjectForm({...subjectForm, code: v})} />
                 <InputGroup label="Subject Name" placeholder="e.g., Computer Networks" value={subjectForm.name} onChange={(v) => setSubjectForm({...subjectForm, name: v})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <InputGroup label="Semester" placeholder="6" type="number" value={subjectForm.semester} onChange={(v) => setSubjectForm({...subjectForm, semester: v})} />
+                <InputGroup label="Branch" placeholder="IT or CS" value={subjectForm.branch} onChange={(v) => setSubjectForm({...subjectForm, branch: v})} />
               </div>
               <SubmitButton label="Publish Subject to Database" />
             </form>

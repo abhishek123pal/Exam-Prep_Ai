@@ -7,8 +7,15 @@ import prisma from '../config/db';
 const orchestrator = new LLMOrchestrator();
 
 export const handleStreamingChat = async (req: Request, res: Response) => {
-  const { prompt, subjectId, type, embedding } = req.body;
-  const sessionId = req.body.sessionId || `session_${subjectId}`;
+  const { prompt, subjectId, type, embedding, cacheRequestType = type || 'chat' } = req.body;
+  if (typeof subjectId !== 'string' || !subjectId.trim()) {
+    return res.status(400).json({ error: 'subjectId is required.' });
+  }
+  if (type !== 'sample_paper' && (typeof prompt !== 'string' || !prompt.trim())) {
+    return res.status(400).json({ error: 'A prompt is required.' });
+  }
+  const suppliedSessionId = typeof req.body.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const sessionId = suppliedSessionId.slice(0, 128) || `session_${subjectId}`;
 
   // SSE Protocol Headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -27,7 +34,7 @@ export const handleStreamingChat = async (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify({ error: "Prompt context is required." })}\n\n`);
         return res.end();
       }
-      activePrompt = await generateStudyMaterial(subjectId, prompt);
+      activePrompt = await generateStudyMaterial(subjectId, prompt, embedding);
       
       // Critical Guard: Empty DB response prevention
       if (!activePrompt || activePrompt.trim() === '') {
@@ -62,9 +69,9 @@ export const handleStreamingChat = async (req: Request, res: Response) => {
     if (type !== 'sample_paper' && embedding && fullResponseText) {
       const formattedEmbedding = Array.isArray(embedding) ? `[${embedding.join(',')}]` : embedding;
       prisma.$executeRaw`
-        INSERT INTO "SemanticCache" (query, response, embedding)
-        VALUES (${prompt}, ${fullResponseText}, ${formattedEmbedding}::vector)
-        ON CONFLICT (query) DO NOTHING;
+        INSERT INTO "SemanticCache" ("subjectId", "requestType", query, response, embedding)
+        VALUES (${subjectId}, ${cacheRequestType}, ${prompt}, ${fullResponseText}, ${formattedEmbedding}::vector)
+        ON CONFLICT ("subjectId", "requestType", query) DO NOTHING;
       `.catch(e => console.error("⚠️ [CACHE WORKER ERROR]:", e.message));
     }
 

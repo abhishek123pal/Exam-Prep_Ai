@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, Sparkles, Flame, Target, BookOpen, 
   FileText, AlertTriangle, ChevronRight, BrainCircuit, 
-  Book, Layers, CornerDownLeft, Database
+  Book, Layers, CornerDownLeft
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,9 +18,15 @@ interface Subject {
   code: string;
 }
 
-const MOCK_SOURCES = [
-  { title: "AKTU Quantum - AI Context", type: "RAG Engine", domain: "internal", icon: <Database size={14} className="text-indigo-400" /> },
-];
+function getChatSessionId() {
+  const storageKey = 'examprep-chat-session-id';
+  let sessionId = window.localStorage.getItem(storageKey);
+  if (!sessionId) {
+    sessionId = window.crypto.randomUUID();
+    window.localStorage.setItem(storageKey, sessionId);
+  }
+  return sessionId;
+}
 
 export default function DashboardPage() {
   // --- UI STATES ---
@@ -30,10 +36,9 @@ export default function DashboardPage() {
   const [showResults, setShowResults] = useState(false);
   
   // --- DATA STATES ---
-  const [subjects, setSubjects] = useState<Subject[]>([
-    { id: "18cfdbda-cde1-4d52-937d-feabfab2a95e", name: "Compiler Design", code: "KIT601" } // Fallback baseline
-  ]);
-  const [activeSubjectId, setActiveSubjectId] = useState('18cfdbda-cde1-4d52-937d-feabfab2a95e');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [activeSubjectId, setActiveSubjectId] = useState('');
+  const [subjectError, setSubjectError] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [activeProvider, setActiveProvider] = useState('');
 
@@ -41,17 +46,15 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/ai/subjects'); // Create this route or use mock if not ready
-        if (res.ok) {
-          const data = await res.json();
-          if (data.length > 0) {
-            setSubjects(data);
-            setActiveSubjectId(data[0].id);
-          }
-        }
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        const res = await fetch(`${apiBase}/api/ai/subjects`);
+        if (!res.ok) throw new Error(`Subject request failed (${res.status}).`);
+        const data: Subject[] = await res.json();
+        setSubjects(data);
+        setActiveSubjectId(data[0]?.id || '');
+        setSubjectError(data.length ? '' : 'No subjects are available yet. Add one from the admin page.');
       } catch (err) {
-        console.warn("⚠️ Backed subjects route missing, defaulting to static configuration.");
-        setActiveSubjectId(subjects[0].id);
+        setSubjectError(err instanceof Error ? err.message : 'Could not load subjects.');
       }
     };
     fetchSubjects();
@@ -65,6 +68,10 @@ export default function DashboardPage() {
     const finalType = overrideType || "chat";
 
     if (!finalQuery.trim()) return;
+    if (!activeSubjectId) {
+      setSubjectError('Choose or add a subject before asking the AI.');
+      return;
+    }
     
     setSubmittedQuery(finalQuery);
     setIsSearching(true);
@@ -73,14 +80,15 @@ export default function DashboardPage() {
     setActiveProvider('CONNECTING...');
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/chat/stream', {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiBase}/api/ai/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: finalQuery,
           subjectId: activeSubjectId,
           type: finalType, // 👈 Dynamically pipes 'chat', 'mock_exam', 'revision_notes', etc.
-          history: []
+          sessionId: getChatSessionId()
         })
       });
 
@@ -186,6 +194,7 @@ export default function DashboardPage() {
               <select 
                 value={activeSubjectId}
                 onChange={(e) => setActiveSubjectId(e.target.value)}
+                disabled={!subjects.length}
                 className="bg-transparent text-slate-300 text-sm font-medium outline-none cursor-pointer appearance-none pr-4 hover:text-white transition-colors"
               >
                 {subjects.map((sub) => (
@@ -212,6 +221,7 @@ export default function DashboardPage() {
               {isSearching ? 'Thinking...' : 'Ask'} <CornerDownLeft size={12} />
             </button>
           </form>
+          {subjectError && <p role="status" className="relative mt-3 text-center text-sm text-amber-300">{subjectError}</p>}
         </div>
 
         {/* --- DYNAMIC LAYOUT RENDERER --- */}
