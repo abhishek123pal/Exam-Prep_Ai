@@ -66,3 +66,16 @@ enum Role {
   STUDENT
   ADMIN
 }
+
+model KnowledgeChunk {
+  id          String   @id @default(uuid())
+  subjectId   String   // किस सब्जेक्ट का है?
+  sourceType  String   // 'PYQ', 'SYLLABUS', 'NOTES'
+  metadata    Json?    // एक्स्ट्रा इन्फो (जैसे: { year: 2026, unit: 1 })
+  content     String   // असली टेक्स्ट (300-400 words)
+  
+  // Gemini text-embedding-004 outputs 768 dimensions
+  embedding   Unsupported("vector(768)") 
+
+  createdAt   DateTime @default(now())
+}
