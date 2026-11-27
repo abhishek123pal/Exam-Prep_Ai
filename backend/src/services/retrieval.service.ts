@@ -1,16 +1,17 @@
 // backend/src/services/retrieval.service.ts
 
 import { prisma } from '../lib/prisma';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getEmbedding, toPgVector } from './embedding.service';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-export const retrieveRelevantContext = async (userQuery: string, subjectId: string, limit: number = 3) => {
+export const retrieveRelevantContext = async (
+  userQuery: string,
+  subjectId: string,
+  limit: number = 3,
+  cachedQueryVector?: string,
+) => {
   try {
     // 1. User के सवाल को Embedding (Vector) में बदलो
-    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
-    const result = await embeddingModel.embedContent(userQuery);
-    const queryVector = result.embedding.values;
+    const queryVector = cachedQueryVector || toPgVector(await getEmbedding(userQuery, 'RETRIEVAL_QUERY'));
 
     // 2. Supabase (pgvector) में Cosine Distance (<=>) का इस्तेमाल करके सर्च करो
     // हम 1 - (distance) करके similarity score निकाल रहे हैं ताकि पता चले कितना % मैच हुआ है
@@ -20,7 +21,7 @@ export const retrieveRelevantContext = async (userQuery: string, subjectId: stri
       SELECT 
         id, 
         content, 
-        1 - (embedding <=> ${queryVector}::vector) as similarity
+      1 - (embedding <=> ${queryVector}::vector) as similarity
       FROM "KnowledgeChunk"
       WHERE "subjectId" = ${subjectId}
       ORDER BY embedding <=> ${queryVector}::vector

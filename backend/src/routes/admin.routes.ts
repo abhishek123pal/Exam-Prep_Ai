@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { addSubject, ingestKnowledge } from "../controllers/admin.controller";
+import { requireAdminKey } from "../middlewares/admin-auth.middleware";
 
 const router = Router();
+router.use(requireAdminKey);
 
 router.use((req, res, next) => {
     console.log("🔥 ADMIN REQUEST:", req.method, req.originalUrl);

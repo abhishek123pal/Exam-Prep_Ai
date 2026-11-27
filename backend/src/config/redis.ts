@@ -5,19 +5,15 @@ dotenv.config();
 
 const redisUrl = process.env.REDIS_URL;
 
-if (!redisUrl) {
-  console.error("❌ CRITICAL: REDIS_URL is missing in .env file!");
-  process.exit(1);
-}
-
-// Production-ready Redis client initialization
-export const redis = new Redis(redisUrl, {
+// Redis is optional for local development. Chat still works with process memory.
+export const redis = redisUrl ? new Redis(redisUrl, {
   maxRetriesPerRequest: 3,
   retryStrategy(times) {
     const delay = Math.min(times * 50, 2000);
     return delay;
   },
-});
+}) : null;
 
-redis.on('connect', () => console.log('🚀 [REDIS]: Connected successfully!'));
-redis.on('error', (err) => console.error('❌ [REDIS] Error:', err.message));
+redis?.on('connect', () => console.log('🚀 [REDIS]: Connected successfully!'));
+redis?.on('error', (err) => console.error('❌ [REDIS] Error:', err.message));
+if (!redisUrl) console.warn('[REDIS]: REDIS_URL is not set; using in-memory chat history.');

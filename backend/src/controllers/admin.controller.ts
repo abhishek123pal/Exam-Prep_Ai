@@ -2,44 +2,45 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { splitTextIntoChunks } from '../utils/textSplitter';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+import { getEmbedding, toPgVector } from '../services/embedding.service';
 
 export const ingestKnowledge = async (req: Request, res: Response) => {
   try {
     // 1. Validate Input
     const { subjectId, type, content, metadata } = req.body;
-    if (!subjectId || !content || content.length < 50) {
-      return res.status(400).json({ success: false, error: "Invalid input: subjectId and content required." });
+    if (typeof subjectId !== 'string' || !subjectId || typeof content !== 'string' || content.trim().length < 50) {
+      return res.status(400).json({ success: false, error: "A subjectId and at least 50 characters of content are required." });
     }
 
+    const subject = await prisma.subject.findUnique({ where: { id: subjectId }, select: { id: true } });
+    if (!subject) return res.status(404).json({ success: false, error: 'Subject not found.' });
+
     const chunks = splitTextIntoChunks(content, 800);
-    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
-    // 2. Use a Transaction to ensure all chunks are saved or none are
+    // Complete network requests before opening a transaction so a slow provider
+    // cannot hold a database connection and transaction open.
+    const vectors: string[] = [];
+    for (const chunk of chunks) {
+      vectors.push(toPgVector(await getEmbedding(chunk, 'RETRIEVAL_DOCUMENT')));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    // Insert all vectors atomically.
     await prisma.$transaction(async (tx) => {
-      for (const chunk of chunks) {
-        // Generate Embedding
-        const result = await embeddingModel.embedContent(chunk);
-        const embeddingArray = result.embedding.values;
-
-        // Save to DB via Transaction
+      for (const [index, chunk] of chunks.entries()) {
         await tx.$executeRaw`
           INSERT INTO "KnowledgeChunk" ("id", "subjectId", "sourceType", "metadata", "content", "embedding", "createdAt")
           VALUES (
-            gen_random_uuid(), 
+            gen_random_uuid()::text,
             ${subjectId}, 
             ${type || 'GENERAL'}, 
             ${metadata ? JSON.stringify(metadata) : '{}'}::jsonb, 
             ${chunk}, 
-            ${embeddingArray}::vector, 
+            ${vectors[index]}::vector,
             NOW()
           )
         `;
 
-        // 3. Rate Limit Protection: 100ms pause to avoid Gemini API Rate Limits
-        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     });
 
@@ -53,15 +54,20 @@ export const ingestKnowledge = async (req: Request, res: Response) => {
     return res.status(500).json({ 
       success: false, 
       error: "Failed to ingest data",
-      details: error.message 
     });
   }
 };
 export const addSubject = async (req: Request, res: Response) => {
   try {
     const { code, name, semester, branch } = req.body;
+    const semesterNumber = Number(semester);
+    if (typeof code !== 'string' || !code.trim() || typeof name !== 'string' || !name.trim() ||
+        !Number.isInteger(semesterNumber) || semesterNumber < 1 || semesterNumber > 12 ||
+        typeof branch !== 'string' || !branch.trim()) {
+      return res.status(400).json({ success: false, error: 'code, name, semester (1–12), and branch are required.' });
+    }
     const newSubject = await prisma.subject.create({
-      data: { code, name, semester, branch }
+      data: { code: code.trim(), name: name.trim(), semester: semesterNumber, branch: branch.trim() }
     });
     return res.status(201).json({ success: true, data: newSubject });
   } catch (error) {

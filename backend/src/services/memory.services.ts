@@ -1,14 +1,18 @@
 import { redis } from '../config/redis';
 
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+const localHistory = new Map<string, ChatMessage[]>();
+
 export const memoryService = {
   // 1. Fetch chat history from Redis
-  getHistory: async (sessionId: string): Promise<any[]> => {
+  getHistory: async (sessionId: string): Promise<ChatMessage[]> => {
+    if (!redis) return localHistory.get(sessionId) || [];
     try {
       const data = await redis.get(`chat:${sessionId}`);
       return data ? JSON.parse(data) : [];
     } catch (error: any) {
       console.error(`⚠️ [REDIS FETCH ERROR] for session ${sessionId}:`, error.message);
-      return []; // Fail-safe: Redis डाउन हो तो भी चैट न रुके
+      return localHistory.get(sessionId) || [];
     }
   },
 
@@ -21,23 +25,26 @@ export const memoryService = {
       history.push({ role, content });
 
       // 🛡️ Context Window Protection: अगर 10 से ज्यादा मैसेज हैं, तो पुराना हटाओ (Token Limit Fix)
-      if (history.length > 10) {
-        history.shift(); 
-      }
+      const boundedHistory = history.slice(-10);
 
       // Redis में JSON स्ट्रिंग स्टोर करो और 24 घंटे (86400 सेकंड) का TTL सेट करो
-      await redis.set(key, JSON.stringify(history), 'EX', 86400);
+      if (redis) await redis.set(key, JSON.stringify(boundedHistory), 'EX', 86400);
+      else localHistory.set(sessionId, boundedHistory);
     } catch (error: any) {
       console.error(`⚠️ [REDIS SAVE ERROR] for session ${sessionId}:`, error.message);
+      const fallback = [...(localHistory.get(sessionId) || []), { role, content }].slice(-10);
+      localHistory.set(sessionId, fallback);
     }
   },
 
   // 3. Optional: Clear history if user resets chat
   clearHistory: async (sessionId: string): Promise<void> => {
     try {
-      await redis.del(`chat:${sessionId}`);
+      if (redis) await redis.del(`chat:${sessionId}`);
+      else localHistory.delete(sessionId);
     } catch (error: any) {
       console.error(`⚠️ [REDIS DELETE ERROR]:`, error.message);
+      localHistory.delete(sessionId);
     }
   }
 };

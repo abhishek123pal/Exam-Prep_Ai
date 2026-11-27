@@ -3,6 +3,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getEmbedding } from '../services/embedding.service';
 import prisma from '../config/db';
+import { memoryService } from '../services/memory.services';
 
 // 🚨 Strict typing (No 'any' allowed in my code reviews)
 interface CacheMatch {
@@ -13,25 +14,33 @@ interface CacheMatch {
 
 export const semanticCacheMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   // 1. Extract subjectId alongside prompt
-  const { prompt, subjectId } = req.body;
+  const { prompt, subjectId, type = 'chat' } = req.body;
   
-  if (!prompt || !subjectId) return next();
+  if (!prompt || !subjectId || type === 'sample_paper') return next();
 
   try {
     const queryVector = await getEmbedding(prompt);
     const vectorString = `[${queryVector.join(',')}]`;
 
-    // 2. Pass subjectId as the 4th parameter to ensure isolated caching
-    const matches = await prisma.$queryRawUnsafe<CacheMatch[]>(`
-      SELECT query, response, similarity 
-      FROM match_semantic_cache($1::vector, $2, $3, $4) 
-    `, vectorString, 0.85, 1, subjectId); 
+    const matches = await prisma.$queryRaw<CacheMatch[]>`
+      SELECT query, response, 1 - (embedding <=> ${vectorString}::vector) AS similarity
+      FROM "SemanticCache"
+      WHERE "subjectId" = ${subjectId}
+        AND "requestType" = ${type}
+        AND 1 - (embedding <=> ${vectorString}::vector) >= 0.85
+      ORDER BY embedding <=> ${vectorString}::vector
+      LIMIT 1
+    `;
 
     if (matches && matches.length > 0) {
       const cachedMatch = matches[0];
       console.log(`⚡ [SEMANTIC CACHE HIT] Subject: ${subjectId} | Confidence: ${(cachedMatch.similarity * 100).toFixed(2)}%`);
 
-      // Mock SSE interface
+      const sessionId = req.body.sessionId.trim();
+      await memoryService.addMessage(sessionId, 'user', prompt);
+      await memoryService.addMessage(sessionId, 'assistant', cachedMatch.response);
+
+      // SSE response for a cached answer
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -44,6 +53,7 @@ export const semanticCacheMiddleware = async (req: Request, res: Response, next:
 
     // Embed for pipeline down-streaming
     req.body.embedding = vectorString;
+    req.body.cacheRequestType = type;
     next();
   } catch (error) {
     console.error("❌ Cache Middleware bypassed due to error:", error);
